@@ -1,0 +1,490 @@
+---
+title: "Exploration and Modeling of Warfarin Dosage"
+output: html_document
+---
+Ploypun Narindrarangkura
+Bioinformatics
+Data Analysis using R
+December 7, 2017
+
+A warfarin dosing estimator (http://warfarindosing.org/Source/Home.aspx) was developed to a guide for use by clinicians in beginning warfarin therapy for patients where medication with a blood thinner is advised to reduce the risk of stroke, heart attack, or other serious conditions.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#1. Perform data cleaning.
+```{r}
+setwd("~/desktop")
+mydata <- read.delim("~/Desktop/iwpc_warfarin.txt")
+
+#rename header
+colnames(mydata)[1] <- "SubjectID"
+colnames(mydata)[2] <- "SampleID"
+colnames(mydata)[3] <- "Project"
+colnames(mydata)[4] <- "Gender"
+colnames(mydata)[6] <- "Race"
+colnames(mydata)[8] <- "Ethnicity"
+colnames(mydata)[9] <- "Age"
+colnames(mydata)[10] <- "Height"
+colnames(mydata)[11] <- "Weight"
+colnames(mydata)[12] <- "Indication"
+colnames(mydata)[15] <- "Target_INR"
+colnames(mydata)[16] <- "INR_Range"
+colnames(mydata)[17] <- "Subject_reached_dose"
+colnames(mydata)[18] <- "Dose_Warfarin"
+colnames(mydata)[19] <- "INR"
+colnames(mydata)[20] <- "Smoking"
+colnames(mydata)[21] <- "CYP2C9"
+colnames(mydata)[22] <- "VKORC1"
+
+mydata$Medications <- as.character(mydata$Medications)
+mydata$Comorbidities <- as.character(mydata$Comorbidities)
+
+#Delete columns
+mydata <- mydata[, -5]
+mydata <- mydata[, -6]
+
+#Change class
+mydata$Project <- as.factor(mydata$Project)
+mydata$Subject_reached_dose <- as.factor(mydata$Subject_reached_dose)
+mydata$Smoking <- as.factor(mydata$Smoking)
+
+#Age
+summary(mydata$Age)
+levels(mydata$Age)[1] <- "10 - 19"
+
+#rename value in Age
+levels(mydata$Age)[1] <- "1"
+levels(mydata$Age)[2] <- "2"
+levels(mydata$Age)[3] <- "3"
+levels(mydata$Age)[4] <- "4"
+levels(mydata$Age)[5] <- "5"
+levels(mydata$Age)[6] <- "6"
+levels(mydata$Age)[7] <- "7"
+levels(mydata$Age)[8] <- "8"
+levels(mydata$Age)[9] <- "9"
+mydata$Age <- as.numeric(mydata$Age)
+
+#rename value in Smoking
+levels(mydata$Smoking)[1] <- "No"
+levels(mydata$Smoking)[2] <- "Yes"
+
+#Cleaning INR Range
+summary(mydata$INR_Range)
+levels(mydata$INR_Range)[levels(mydata$INR_Range)=="3-Feb"] <- "2-3"
+
+mydata$INR_Range[mydata$INR_Range == levels(mydata$INR_Range)[7]] <- levels(mydata$INR_Range)[6]
+
+#Drop unused factor levels: in this case will drop level 4-Mar
+mydata$INR_Range <- droplevels(mydata$INR_Range)
+
+#Ordering INR range
+mydata$INR_Range <- factor(mydata$INR_Range, levels=c("1.7-2.8", "1.7-3.3", "2-3", "2-3.5", "2.5-3.5", "3.0-4.0"))
+
+#Ordering VKORC1
+mydata$VKORC1 <- factor(mydata$VKORC1, levels=c("G/G", "A/G", "A/A"))
+```
+
+Medication
+```{r}
+#Amiodarone/Cordarone/Pacerone
+library(stringr)
+library(plyr)
+mydata$amiodarone <- ifelse( !is.na(mydata$Medications) & str_detect(mydata$Medications, "amiodarone"),
+                            yes = 1,
+                            no = 0)
+mydata$amiodarone[str_detect(mydata$Medications, "not amiodarone")==T] = 0
+mydata$amiodarone[str_detect(mydata$Medications, "no amiodarone")==T] = 0
+
+#Aspirin
+mydata$aspirin <- ifelse( !is.na(mydata$Medications) & str_detect(mydata$Medications, "aspirin"),
+                             yes = 1,
+                             no = 0)
+mydata$aspirin[str_detect(mydata$Medications, "not aspirin")==T] = 0
+mydata$aspirin[str_detect(mydata$Medications, "no aspirin")==T] = 0
+
+#Statin
+mydata$statin <- ifelse( !is.na(mydata$Medications) & str_detect(mydata$Medications, "simvastatin|Simvastatin|atorvastatin"),
+                             yes = 1,
+                             no = 0)
+mydata$statin[str_detect(mydata$Medications, "not simvastatin")==T] = 0
+mydata$statin[str_detect(mydata$Medications, "no simvastatin")==T] = 0
+
+mydata$statin[str_detect(mydata$Medications, "not Simvastatin")==T] = 0
+mydata$statin[str_detect(mydata$Medications, "no Simvastatin")==T] = 0
+
+
+#Azoles
+mydata$azoles <- ifelse( !is.na(mydata$Medications) & str_detect(mydata$Medications, "azole"),
+                              yes = 1,
+                              no = 0)
+#Sulfa
+mydata$sulfa <- ifelse( !is.na(mydata$Medications) & str_detect(mydata$Medications, "Septra|bactrim"),
+                         yes = 1,
+                         no = 0)
+
+#Acetaminophen
+mydata$acetaminophen <- ifelse( !is.na(mydata$Medications) & str_detect(mydata$Medications, "acetaminophen|Acetaminophen"),
+                              yes = 1,
+                              no = 0)
+
+mydata$acetaminophen[str_detect(mydata$Medications, "not acetaminophen")==T] = 0
+mydata$acetaminophen[str_detect(mydata$Medications, "no acetaminophen")==T] = 0
+
+#Clopidogrel
+mydata$clopidogrel <- ifelse( !is.na(mydata$Medications) & str_detect(mydata$Medications, "clopidogrel"),
+                          yes = 1,
+                          no = 0)
+
+#Enzyme Inducers
+mydata$enzyme_inducer <- ifelse(!is.na(mydata$Medications) & str_detect(mydata$Medications, "carbamazepine|Carbamazepine|phenobarbital|phenytoin|Phenytoin|rifampin"),
+                              yes = 1,
+                              no = 0)
+
+mydata[,21:28] <- lapply(mydata[,21:28], as.factor)
+```
+
+Impute missing data
+```{r}
+mydata$Weight[is.na(mydata$Weight)] <- mean(mydata$Weight,na.rm=T)
+mydata$Height[is.na(mydata$Height)] <- mean(mydata$Height,na.rm=T)
+mydata$INR[is.na(mydata$INR)] <- mean(mydata$INR,na.rm=T)
+
+mydata <- mydata[, -c(1:3)]
+mydata <- mydata[, -c(7:9)]
+mydata <- mydata[, -c(7:9)]
+mydata <- mydata[, -9]
+
+summary(mydata)
+```
+
+#2.Create two subsets for further exploration.
+```{r}
+#Warfarin level
+cuthigh <- mean(mydata$Dose_Warfarin, na.rm = TRUE) + 
+  0.2*sd(mydata$Dose_Warfarin, na.rm = TRUE)
+
+cutlow <- mean(mydata$Dose_Warfarin, na.rm = TRUE) - 
+  0.2*sd(mydata$Dose_Warfarin, na.rm = TRUE)
+
+mydata$warfarin_level <- mydata$Dose_Warfarin
+
+mydata$warfarin_level <- cut(mydata$warfarin_level, breaks=c(0, cutlow, cuthigh, Inf))
+levels(mydata$warfarin_level)[1] <- "Low dose"
+levels(mydata$warfarin_level)[2] <- "Medium dose"
+levels(mydata$warfarin_level)[3] <- "High dose"
+```
+
+Subset data
+```{r}
+HighDose <- subset(mydata, warfarin_level == "High dose")
+MediumDose <- subset(mydata, warfarin_level == "Medium dose")
+LowDose <- subset(mydata, warfarin_level == "Low dose")
+```
+
+#3. Display aggregate information on the data.
+```{r}
+summary(HighDose)
+summary(LowDose)
+```
+
+#4. Create visualizations of the distributions of key variables by high/low warfarin dosage.
+```{r}
+library(ggplot2)
+library(Rmisc)
+```
+GENDER
+```{r}
+g1 <- ggplot(data=subset(HighDose, !is.na(Gender)), main = "High Dose Warfarin")
+g2 <- ggplot(data=subset(LowDose, !is.na(Gender)), main = "Low Dose Warfarin")
+p1 <- g1 + geom_bar(aes(Gender, fill=Gender)) +
+  xlab("Gender") +
+  ylab("Frequency") +
+  ggtitle("High Dose Warfarin")
+p2 <- g2 + geom_bar(aes(Gender, fill=Gender)) +
+  xlab("Gender") +
+  ylab("Frequency") +
+  ggtitle("Low Dose Warfarin") 
+multiplot(p1, p2, cols=2)
+```
+
+RACE
+```{r}
+g3 <- ggplot(data=subset(HighDose, !is.na(Race)), main = "High Dose Warfarin")
+g4 <- ggplot(data=subset(LowDose, !is.na(Race)), main = "Low Dose Warfarin")
+p3 <- g3 + geom_bar(aes(Race, fill=Race)) +
+  xlab("Race") +
+  ylab("Frequency") +
+  ggtitle("High Dose Warfarin")
+p4 <- g4 + geom_bar(aes(Race, fill=Race)) +
+  xlab("Race") +
+  ylab("Frequency") +
+  ggtitle("Low Dose Warfarin") 
+multiplot(p3, p4, cols=2)
+```
+
+ETHNICITY
+```{r}
+g5 <- ggplot(data=subset(HighDose, !is.na(Ethnicity)), main = "High Dose Warfarin")
+g6 <- ggplot(data=subset(LowDose, !is.na(Ethnicity)), main = "Low Dose Warfarin")
+p5 <- g5 + geom_bar(aes(Ethnicity, fill=Ethnicity)) +
+  xlab("Ethnicity") +
+  ylab("Frequency") +
+  ggtitle("High Dose Warfarin")
+p6 <- g6 + geom_bar(aes(Ethnicity, fill=Ethnicity)) +
+  xlab("Ethnicity") +
+  ylab("Frequency") +
+  ggtitle("Low Dose Warfarin") 
+multiplot(p5, p6, cols=2)
+```
+
+AGE
+```{r}
+g7 <- ggplot(data=subset(HighDose, !is.na(Age)), main = "High Dose Warfarin")
+g8 <- ggplot(data=subset(LowDose, !is.na(Age)), main = "Low Dose Warfarin")
+p7 <- g7 + geom_bar(aes(Age, fill=Age)) +
+  xlab("Age in Decades") +
+  ylab("Frequency") +
+  ggtitle("High Dose Warfarin")
+p8 <- g8 + geom_bar(aes(Age, fill=Age)) +
+  xlab("Age in Decades") +
+  ylab("Frequency") +
+  ggtitle("Low Dose Warfarin") 
+multiplot(p7, p8, cols=2)
+```
+
+#5. Create visualizations of a couple of relationships you find interesting between variables.
+
+HEIGHT AND DOSE
+```{r}
+g9 <- ggplot(data=mydata)
+g9 + geom_point(data=subset(mydata, !is.na(Height) & !is.na(Dose_Warfarin)), aes(y=Height, x=Dose_Warfarin, color=warfarin_level), size=0.5) +
+  xlab("Warfarin Dosage") +
+  ylab("Height (cm)") +
+  ggtitle("Scatter plot")
+
+g9 + geom_boxplot(data=subset(mydata, !is.na(Height) & !is.na(warfarin_level) ), aes(y=Height, x=warfarin_level, fill=warfarin_level), alpha =.5) +
+  xlab("Warfarin level") +
+  ylab("Height (cm)") +
+  ggtitle("Box plot")
+```
+
+WEIGHT AND DOSE
+```{r}
+g9 + geom_point(data=subset(mydata, !is.na(Weight) & !is.na(Dose_Warfarin)), aes(y=Weight, x=Dose_Warfarin, color=warfarin_level), size=0.5) +
+  xlab("Warfarin Dosage") +
+  ylab("Weight (kg)") +
+  ggtitle("Scatter plot")
+
+g9 + geom_boxplot(data=subset(mydata, !is.na(Weight) & !is.na(warfarin_level) ), aes(y=Weight, x=warfarin_level, fill=warfarin_level), alpha =.5) +
+  xlab("Warfarin level") +
+  ylab("Weight (kg)") +
+  ggtitle("Box plot")
+```
+
+#6. Fit 2 regression models, as described below, to estimate warfarin dosage.
+```{r}
+mydata <- na.omit(mydata)
+
+model1 <- lm(Dose_Warfarin ~ Gender + Race + Ethnicity + Age + Height +
+               Weight + INR + CYP2C9 + VKORC1 + amiodarone +
+               aspirin + statin + azoles + sulfa + acetaminophen +
+               clopidogrel + enzyme_inducer, data = mydata)
+summary(model1)
+exp(coefficients(model1))
+```
+Adjusted R-squared:  0.4524
+
+```{r} 
+model2 <- lm(Dose_Warfarin ~ Gender + Race + Ethnicity + Age + Height + Weight +
+               INR + CYP2C9 + VKORC1 + amiodarone +
+               azoles + enzyme_inducer, data = mydata)
+summary(model2)
+exp(coefficients(model2))
+```
+Adjusted R-squared:  0.453 
+
+
+#Step function 1
+```{r} 
+fit_null <- lm(Dose_Warfarin~1, data = mydata)
+fit_full <- lm(Dose_Warfarin ~  Gender + Race + Ethnicity + Age + Height + Weight +
+               INR + CYP2C9 + VKORC1 + amiodarone +
+               azoles + enzyme_inducer, data = mydata)
+fit.step <- step(fit_null, scope=list(lower=fit_null, upper=fit_full), direction= "both")
+```
+Step:  AIC=20193.87
+Same as MODEL 2
+
+Replace response variable therapeutic warfarin dose with square root of therapeutic warfarin dose.
+```{r} 
+mydata$root_warfarin <- (mydata$Dose_Warfarin)^0.5
+model3 <- lm(root_warfarin ~ VKORC1 + Age + Weight + CYP2C9 + amiodarone + 
+    INR + Ethnicity + Height + azoles + enzyme_inducer + Gender + 
+    Race, data = mydata)
+summary(model3)
+exp(coefficients(model3))
+```
+Adjusted R-squared:  0.5133
+
+
+#7. Fit an SVM model to classify patients into categories of high/low warfarin dosage.
+```{r} 
+#install.packages("e1071", dependencies = TRUE)
+library("e1071")
+
+mydata2 <- rbind(HighDose,LowDose)
+mydata2$warfarin_level <- as.character(mydata2$warfarin_level)
+mydata2$warfarin_level <- as.factor(mydata2$warfarin_level)
+
+mydata2 <- na.omit(mydata2)
+attach(mydata2)
+x <- subset(mydata2, select = -warfarin_level)
+x <- x[,-7]
+y <- warfarin_level
+
+#Test your results
+n <- nrow(mydata2)
+ntrain <- round(n*0.8) # number of training examples
+tindex <- sample(n,ntrain) # indices of training samples
+trainset <- x[tindex,]
+testset <- x[-tindex,]
+ytrain <- y[tindex]
+ytest <- y[-tindex]
+
+svmfit <- svm(ytrain ~ ., data = trainset, kernel = "radial",cost=10, gamma=0.5, probability = TRUE, scale = TRUE)
+summary(svmfit)
+```
+Plot SVM - Weight ~ Height
+```{r} 
+x2 <- mydata2[,5:6]
+y2 <- mydata2[,19]
+trainset2 <- x2[tindex,]
+testset2 <- x2[-tindex,]
+ytrain2 <- y2[tindex]
+ytest2 <- y2[-tindex]
+
+svmfit2 <- svm(ytrain2 ~ ., data = trainset2, kernel = "radial",cost=10, gamma=0.5, probability = TRUE, scale = TRUE)
+print(svmfit2)
+
+plot(svmfit2, trainset2, Weight ~ Height)
+```
+Predict labels on test
+```{r} 
+ypred = predict(svmfit,testset, probability = TRUE)
+system.time(predict(svmfit,testset))
+```
+The confusion matrix result of prediction
+```{r} 
+table(ypred,ytest)
+```
+Compute at the prediction scores
+```{r} 
+ypredscore = predict(svmfit,testset,type="decision")
+```
+Compute accuracy
+```{r} 
+sum(ypred==ypredscore)/length(ypredscore)
+```
+
+Check that the predicted labels are the signs of the scores
+```{r} 
+table(ypredscore,ypred)
+```
+#ROC curve
+```{r} 
+#install.packages("ROCR")
+#install.packages("pROC")
+library(ROCR)
+library(pROC)
+
+#Change warfarin level to numeric and predict again
+mydata2$warfarin_level <- as.character(mydata2$warfarin_level)
+mydata2$warfarin_level[mydata2$warfarin_level == "High dose"] <- 1
+mydata2$warfarin_level[mydata2$warfarin_level == "Low dose"] <- 0
+mydata2$warfarin_level <- as.numeric(mydata2$warfarin_level)
+
+mydata2 <- na.omit(mydata2)
+attach(mydata2)
+x <- subset(mydata2, select = -warfarin_level)
+x <- x[,-7]
+y <- warfarin_level
+n <- nrow(mydata2)
+ntrain <- round(n*0.8) # number of training examples
+tindex <- sample(n,ntrain) # indices of training samples
+trainset <- x[tindex,]
+testset <- x[-tindex,]
+ytrain <- y[tindex]
+ytest <- y[-tindex]
+
+svmfit <- svm(ytrain ~ ., data = trainset, kernel = "radial",cost=10, gamma=0.5, probability = TRUE, scale = TRUE)
+
+ypred = predict(svmfit,testset, probability = TRUE)
+ypredscore = predict(svmfit,testset,type="decision")
+
+rocplot <- function(pred, truth, ...) {
+  predob = prediction(pred, truth)
+  perf = performance(predob, "tpr", "fpr")
+  plot(perf, ...)
+  area <- auc(truth, pred)
+  area <- format(round(area, 4), nsmall = 4)
+  text(x=0.8, y=0.1, labels = paste("AUC =", area))
+
+  # the reference x=y line
+  segments(x0=0, y0=0, x1=1, y1=1, col="gray", lty=2)
+}
+
+rocplot(ypredscore, ytest, col="blue")
+```
+Plot precision/recall curve
+```{r} 
+pred <- prediction(ypredscore,ytest)
+perf <- performance(pred, measure = "prec", x.measure = "rec")
+plot(perf)
+```
+Plot accuracy as function of threshold
+```{r} 
+perf <- performance(pred, measure = "acc")
+plot(perf)
+```
+
+#8. Briefly summarize your findings, including a few sentences comparing the summary results and a plot (ex: Residuals vs Fitted and/or Normal Q-Q) between the two regression models. Also briefly discuss the SVM classifier.
+```{r} 
+par(mfrow=c(1,1))
+plot(model2, pch=16, which=1)
+```
+
+```{r}
+par(mfrow=c(1,1))
+plot(model3, pch=16, which=1)
+```
+
+##__Summary Report__
+#Model 2
+Step:  AIC=20193.87 , Adjusted R-squared:  0.453
+
+According to the results from Model 2, linear regression was calculated to predict warfarin dose based on VKORC1, Age, Weight, CYP2C9, amiodarone, INR, Ethnicity, Height, azoles, enzyme_inducer, Gender, Race
+
+A significant regression equation was found : Dose_Warfarin = 2.47 + 0.24(Gendermale) + 0.05(Age) + 1.12(Height) + 1.18(Weight) + 2.31(INR) + 1.48e-08(CYP2C9*1/*11) + 0.01(CYP2C9*1/*2) + 7.88e-05(CYP2C9*1/*3) + 4.69e-07(CYP2C9*1/*5) + 2.95e-06(CYP2C9*2/*2) + 4.08e-09(CYP2C9*2/*3) + 4.86e-10(CYP2C9*3/*3) + 3.16e-05(VKORC1A/G) + 2.60e-09(VKORC1A/A) + 6.17e-04(amiodarone1) + 0.03(azoles1) + 3.7(enzyme_inducer1)
+
+#Model 3
+Adjusted R-squared:  0.5133
+
+According to the results from Model 3, linear regression was calculated to predict square root of warfarin dose based on VKORC1, Age, Weight, CYP2C9, amiodarone, INR, Ethnicity, Height, azoles, enzyme_inducer, Gender, Race
+
+A significant regression equation was found : root_warfarin = 43.58 + 0.43(VKORC1A/G) + 0.17(VKORC1A/A) + 0.78(Age) + 1.01(Weight) + 0.22(CYP2C9*1/*11) + 0.60(CYP2C9*1/*2) + 0.42(CYP2C9*1/*3) + 0.34(CYP2C9*1/*5) + 0.31(CYP2C9*2/*2) + 0.15(CYP2C9*2/*3) + 0.10(CYP2C9*3/*3) + 0.52(amiodarone1) +  1.38(INR) + 1.01(Height) + 0.80(azoles1) + 0.86(Gendermale) + 0.79(RaceBlack or African American)
+
+
+Model 3 has adjusted R-squared 0.5133 that means this model can explain the relationship between predictors and warfarin dose 51.33 %. 
+
+
+Residuals vs Fitted plot of Model 5: <br />
+1. The relationship is linear is reasonable. <br />
+2. The residuals roughly form a "horizontal band"  around the 0 line. This suggests that the variances of the error terms are equal. <br />
+3. There are some outliers (4247, 4163, 3903). <br />
+
+#SVM
+For SVM classification plot, patients who have high height and high weight trend to use high dose of warfarin. <br />
+
+After fitting SVM model with using Radial Kernel, ROC curve is obtained by changing the threshold 0 to threshold t in f(X) > t, and recording false positive and true positive rates as t varies. Area under the curve (AUC) is good.
+

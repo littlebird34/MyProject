@@ -1,0 +1,450 @@
+---
+title: "Relation of SNPs to disease"
+output: html_document
+---
+Ploypun Narindrarangkura
+Bioinformatics
+Data Analysis using R
+October 4, 2017
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Preprocess the data as you see fit.
+##Use R to explore the data. Produce summary statistics and plots to visualize the data.
+
+```{r}
+library(foreign)
+library (stats)
+library(ggplot2)
+library(dplyr)
+
+setwd("/Users/LittleBird/Desktop")
+mydata <- read.arff("disease2a.arff")
+
+logisticPseudoR2s <- function(LogModel) {
+  dev <- LogModel$deviance 
+  nullDev <- LogModel$null.deviance 
+  modelN <-  length(LogModel$fitted.values)
+  R.l <-  1 -  dev / nullDev
+  R.cs <- 1- exp ( -(nullDev - dev) / modelN)
+  R.n <- R.cs / ( 1 - ( exp (-(nullDev / modelN))))
+  cat("Pseudo R^2 for logistic regression\n")
+  cat("Hosmer and Lemeshow R^2  ", round(R.l, 3), "\n")
+  cat("Cox and Snell R^2        ", round(R.cs, 3), "\n")
+  cat("Nagelkerke R^2           ", round(R.n, 3),    "\n")
+}
+```
+
+#Check NA
+```{r}
+colSums(is.na(mydata))
+```
+
+#Descriptive
+```{r}
+summary(mydata$location1)
+summary(mydata$location2)
+summary(mydata$location3)
+summary(mydata$location4)
+summary(mydata$location5)
+summary(mydata$location6)
+summary(mydata$location7)
+summary(mydata$location8)
+summary(mydata$location9)
+summary(mydata$location10)
+summary(mydata$class)
+
+table(mydata$location1, mydata$class)
+round(100*prop.table(table(mydata$location1, mydata$class)),2)
+table(mydata$location2, mydata$class)
+round(100*prop.table(table(mydata$location2, mydata$class)),2)
+table(mydata$location3, mydata$class)
+round(100*prop.table(table(mydata$location3, mydata$class)),2)
+table(mydata$location4, mydata$class)
+round(100*prop.table(table(mydata$location4, mydata$class)),2)
+table(mydata$location5, mydata$class)
+round(100*prop.table(table(mydata$location5, mydata$class)),2)
+table(mydata$location6, mydata$class)
+round(100*prop.table(table(mydata$location6, mydata$class)),2)
+table(mydata$location7, mydata$class)
+round(100*prop.table(table(mydata$location7, mydata$class)),2)
+table(mydata$location8, mydata$class)
+round(100*prop.table(table(mydata$location8, mydata$class)),2)
+table(mydata$location9, mydata$class)
+round(100*prop.table(table(mydata$location9, mydata$class)),2)
+table(mydata$location10, mydata$class)
+round(100*prop.table(table(mydata$location10, mydata$class)),2)
+```
+
+#Plot the data
+
+```{r, echo=FALSE}
+colors1 = c("red", "blue")
+colors2 = c("yellow", "blue", "red")
+plot(mydata$class, xlab = "Disease", ylab = "Frequency", col=colors1)
+plot(mydata$location1, xlab = "SNP Location1", ylab = "Frequency", col=colors2)
+plot(mydata$location5, xlab = "SNP Location5", ylab = "Frequency", col=colors2)
+plot(mydata$location10, xlab = "SNP Location10", ylab = "Frequency", col=colors2)
+```
+
+##Fit regression models in R to model disease using the predictor variables. Your models should include main effects only, interactions only and a full model with both main effects and interactions. The step function may assist you. Produce a final model containing all the predictors you find that are significant.
+
+#Logit1
+```{r}
+logit1 <- glm(class ~ ., data = mydata, family = binomial)
+summary(logit1)
+exp(coefficients(logit1))
+logisticPseudoR2s(logit1)
+```
+#Interpretation
+According to the results from Model 1, logistic regression was calculated to predict disease based on 10 locations of mutation. A significant regression equation was found : class = -0.25Location11 + 0.48Location51 + 0.58Location52 + 0.62Location101 + 0.34Location102 - 0.69
+
+1. Participant's location 1 with 1 mutation decreased risk 0.78 times for the odds of having the disease when comparing with no mutation.
+2. Participant's location 5 with 1 mutation increased risk 1.63 times for the odds of having the disease when comparing with no mutation.
+3. Participant's location 5 with 2 mutation increased risk 1.80 times for the odds of having the disease when comparing with no mutation.
+4. Participant's location 10 with 1 mutation increased risk 1.87 times for the odds of having the disease when comparing with no mutation.
+5. Participant's location 10 with 2 mutation increased risk 1.40 times for the odds of having the disease when comparing with no mutation.
+(When all other variables in the model are held constant.)
+
+Null deviance: 2767.6  on 1999  degrees of freedom
+Residual deviance: 2700.9  on 1979  degrees of freedom
+AIC: 2742.9
+
+#Plot of standardized residuals
+```{r}
+plot(fitted(logit1), rstandard(logit1))
+```
+
+
+#Simple plot of predicted values
+```{r}
+mydata1 = select(mydata,location1,location2,location3,location4,location5,location6,location7,location8,location9,location10,class)
+mydata1 = na.omit(mydata1)
+mydata1$predy = predict(logit1,type="response")
+
+plot(as.numeric(class) ~ predy, data = mydata1,pch = 16,xlab="Predicted probability of 1 response",ylab="Actual response")
+
+g <- ggplot(data = mydata1)
+g + geom_jitter(aes(x=mydata1$class, y=mydata1$predy))
+g + geom_point(aes(x=mydata1$class, y=mydata1$predy))
+```
+
+#Logit 2
+```{r}
+logit2 <- glm(class ~ location1 + location2 + location5 + location6 + location9 + location10, data = mydata, family = binomial())
+summary(logit2)
+exp(coefficients(logit2))
+logisticPseudoR2s(logit2)
+```
+#Interpretation
+According to the results from Model 2, logistic regression was calculated to predict disease based on mutation of location 1,2,5,6,9 and 10. A significant regression equation was found : class = -0.24Location11 + 0.49Location51 + 0.58Location52 + 0.63Location101 + 0.34Location102 - 0.64
+
+1. Participant's location 1 with 1 mutation decreased risk 0.78 times for the odds of having the disease when comparing with no mutation.
+2. Participant's location 5 with 1 mutation increased risk 1.63 times for the odds of having the disease when comparing with no mutation.
+3. Participant's location 5 with 2 mutation increased risk 1.79 times for the odds of having the disease when comparing with no mutation.
+4. Participant's location 10 with 1 mutation increased risk 1.87 times for the odds of having the disease when comparing with no mutation.
+5. Participant's location 10 with 2 mutation increased risk 1.41 times for the odds of having the disease when comparing with no mutation.
+(When all other variables in the model are held constant.)
+
+Null deviance: 2767.6  on 1999  degrees of freedom
+Residual deviance: 2702.3  on 1987  degrees of freedom
+AIC: 2728.3
+
+#Plot of standardized residuals
+```{r}
+plot(fitted(logit2), rstandard(logit2))
+```
+
+
+#Simple plot of predicted values
+```{r}
+mydata2 = select(mydata,location1,location2,location5,location6,location9,location10,class)
+mydata2 = na.omit(mydata2)
+mydata2$predy = predict(logit2,type="response")
+
+plot(as.numeric(class) ~ predy, data = mydata2,pch = 16,xlab="Predicted probability of 1 response",ylab="Actual response")
+
+g <- ggplot(data = mydata2)
+g + geom_jitter(aes(x=mydata2$class, y=mydata2$predy))
+g + geom_point(aes(x=mydata2$class, y=mydata2$predy))
+```
+
+#logit 3
+```{r}
+logit3 <- glm(class ~ location1 + location5 + location10, data = mydata, family = binomial())
+summary(logit3)
+exp(coefficients(logit3))
+logisticPseudoR2s(logit3)
+```
+#Interpretation
+According to the results from Model 3, logistic regression was calculated to predict disease based on mutation of location 1,5 and 10. A significant regression equation was found : class = -0.24Location11 + 0.48Location51 + 0.57Location52 + 0.63Location101 + 0.35Location102 - 0.63
+
+1. Participant's location 1 with 1 mutation decreased risk 0.79 times for the odds of having the disease when comparing with no mutation.
+2. Participant's location 5 with 1 mutation increased risk 1.61 times for the odds of having the disease when comparing with no mutation.
+3. Participant's location 5 with 2 mutation increased risk 1.77 times for the odds of having the disease when comparing with no mutation.
+4. Participant's location 10 with 1 mutation increased risk 1.77 times for the odds of having the disease when comparing with no mutation.
+5. Participant's location 10 with 2 mutation increased risk 1.42 times for the odds of having the disease when comparing with no mutation.
+(When all other variables in the model are held constant.)
+
+Null deviance: 2767.6  on 1999  degrees of freedom
+Residual deviance: 2708.6  on 1993  degrees of freedom
+AIC: 2722.6
+
+#Plot of standardized residuals
+```{r}
+plot(fitted(logit3), rstandard(logit3))
+```
+
+
+#Simple plot of predicted values
+```{r}
+mydata3 = select(mydata,location1,location5,location10,class)
+mydata3 = na.omit(mydata3)
+mydata3$predy = predict(logit3,type="response")
+
+plot(as.numeric(class) ~ predy, data = mydata3,pch = 16,xlab="Predicted probability of 1 response",ylab="Actual response")
+
+g <- ggplot(data = mydata3)
+g + geom_jitter(aes(x=mydata3$class, y=mydata3$predy))
+g + geom_point(aes(x=mydata3$class, y=mydata3$predy))
+```
+
+
+#Step Function 1
+```{r}
+fit_null <- glm(class~1,family = binomial(), data = mydata)
+
+fit_full <- glm(class ~ location1+location2+location3+location4+location5+location6+location7+location8+location9+location10, family = binomial(), data = mydata)
+
+fit.step <- step(fit_null, scope=list(lower=fit_null, upper=fit_full), direction= "both")
+```
+#Interpretation
+The best fit from this model : class ~ location10 + location5 + location1
+AIC=2722.57
+
+#Step Function 2
+```{r}
+fit_null2 <- glm(class~1,family = binomial(), data = mydata)
+
+fit_full2 <- glm(class ~ location1*location5*location10, family = binomial(), data = mydata)
+
+fit.step <- step(fit_null2, scope=list(lower=fit_null2, upper=fit_full2), direction= "both")
+```
+#Interpretation
+The best fit from this model : class ~ location10 + location5 + location10:location5
+AIC=1702.86
+
+#Logit 4
+```{r}
+logit4 <- glm(class ~ location10 + location5 + location10:location5, data = mydata, family = binomial())
+summary(logit4)
+logisticPseudoR2s(logit4)
+```
+#Interpretation
+No significant
+Null deviance: 2767.6  on 1999  degrees of freedom
+Residual deviance: 1684.9  on 1991  degrees of freedom
+AIC: 1702.9
+
+#Logit 5 
+```{r}
+logit5 <- glm(class ~ location5 + location10:location5, data = mydata, family = binomial())
+summary(logit5)
+exp(coefficients(logit5))
+logisticPseudoR2s(logit5)
+```
+#Interpretation
+According to the results from Model 5, logistic regression was calculated to predict disease based on mutation of location 5 and 10. A significant regression equation was found : class = -2.70(location52:location101) - 2.76(location52:location102) - 1.86
+
+1. Participant's location 5 with 2 mutation interaction with location 10 with 1 mutation decreased risk 0.07 times for the odds of having the disease when comparing with no mutation.
+2. Participant's location 5 with 2 mutation interaction with location 10 with 2 mutation decreased risk 0.06 times for the odds of having the disease when comparing with no mutation.
+(When all other variables in the model are held constant.)
+
+
+Null deviance: 2767.6  on 1999  degrees of freedom
+Residual deviance: 1684.9  on 1991  degrees of freedom
+AIC: 1702.9
+
+#Plot of standardized residuals
+```{r}
+plot(fitted(logit5), rstandard(logit5))
+```
+
+#Simple plot of predicted values
+```{r}
+mydata5 = select(mydata,location5,location10,class)
+mydata5 = na.omit(mydata5)
+mydata5$predy = predict(logit5,type="response")
+
+plot(as.numeric(class) ~ predy, data = mydata5,pch = 16,xlab="Predicted probability of 1 response",ylab="Actual response")
+
+g <- ggplot(data = mydata5)
+g + geom_jitter(aes(x=mydata5$class, y=mydata5$predy))
+g + geom_point(aes(x=mydata5$class, y=mydata5$predy))
+```
+
+#Logit 6
+```{r}
+logit6 <- glm(class ~ location10 + location10:location5, data = mydata, family = binomial())
+summary(logit6)
+exp(coefficients(logit6))
+logisticPseudoR2s(logit6)
+```
+#Interpretation
+According to the results from Model 6, logistic regression was calculated to predict disease based on mutation of location 5 and 10. A significant regression equation was found : class = -2.94(location102:location52) - 1.86
+
+Participant's location 10 with 2 mutation interaction with location 5 with 2 mutation decreased risk 5.30 times for the odds of having the disease when comparing with no mutation.(When all other variables in the model are held constant.)
+
+Null deviance: 2767.6  on 1999  degrees of freedom
+Residual deviance: 1684.9  on 1991  degrees of freedom
+AIC: 1702.9
+
+#Plot of standardized residuals
+```{r}
+plot(fitted(logit6), rstandard(logit6))
+```
+
+#Simple plot of predicted values
+```{r}
+mydata6 = select(mydata,location5,location10,class)
+mydata6 = na.omit(mydata6)
+mydata6$predy = predict(logit6,type="response")
+
+plot(as.numeric(class) ~ predy, data = mydata6,pch = 16,xlab="Predicted probability of 1 response",ylab="Actual response")
+
+g <- ggplot(data = mydata6)
+g + geom_jitter(aes(x=mydata6$class, y=mydata6$predy))
+g + geom_point(aes(x=mydata6$class, y=mydata6$predy))
+```
+
+#Logit 7
+```{r}
+logit7 <- glm(class ~ location10 + location5, data = mydata, family = binomial())
+summary(logit7)
+exp(coefficients(logit7))
+logisticPseudoR2s(logit7)
+```
+#Interpretation
+According to the results from Model 7, logistic regression was calculated to predict disease based on mutation of location 5 and 10. A significant regression equation was found : class = 0.63(location101)+0.34(location102)+0.47(location51)+0.56(location52)-0.73
+
+1. Participant's location 10 with 1 mutation increased risk 1.87 times for the odds of having the disease when comparing with no mutation.
+2. Participant's location 10 with 2 mutation increased risk 1.41 times for the odds of having the disease when comparing with no mutation.
+3. Participant's location 5 with 1 mutation increased risk 1.60 times for the odds of having the disease when comparing with no mutation.
+4. Participant's location 5 with 2 mutation increased risk 1.76 times for the odds of having the disease when comparing with no mutation.
+(When all other variables in the model are held constant.)
+
+Null deviance: 2767.6  on 1999  degrees of freedom
+Residual deviance: 2714.9  on 1995  degrees of freedom
+AIC: 2724.9
+
+#Plot of standardized residuals
+```{r}
+plot(fitted(logit7), rstandard(logit7))
+```
+
+#Simple plot of predicted values
+```{r}
+mydata7 = select(mydata,location5,location10,class)
+mydata7 = na.omit(mydata7)
+mydata7$predy = predict(logit7,type="response")
+
+plot(as.numeric(class) ~ predy, data = mydata7,pch = 16,xlab="Predicted probability of 1 response",ylab="Actual response")
+
+g <- ggplot(data = mydata7)
+g + geom_jitter(aes(x=mydata7$class, y=mydata7$predy))
+g + geom_point(aes(x=mydata7$class, y=mydata7$predy))
+```
+
+#Logit8
+```{r}
+logit8 <- glm(class ~ location10:location5, data = mydata, family = binomial())
+summary(logit8)
+exp(coefficients(logit8))
+logisticPseudoR2s(logit8)
+```
+NA were found on this model
+
+#Logit 9
+```{r}
+logit9 <- glm(class ~ location10:location5 -1, data = mydata, family = binomial())
+summary(logit9)
+exp(coefficients(logit9))
+logisticPseudoR2s(logit9)
+```
+#Interpretation
+According to the results from Model 9, logistic regression was calculated to predict disease based on mutation of location 5 and 10. A significant regression equation was found : class = 1.46(location102:location50) + 1.00(location101:location51) + 1.29(location100:location52) - 1.40(location101:location52) - 1.47(location102:location52) - 18.57
+
+1. Participant's location 10 with 2 mutation interaction with no location 5 mutation increased 4.33 times for the disease when comparing with no mutation.
+2. Participant's location 10 with 1 mutation interaction with location 5 with 1 mutation increased 2.72 times for the odds of having disease when comparing with no mutation.
+3. Participant's location 10 with no mutation interaction with location 5 with 2 mutation increased 3.63 times for the disease when comparing with no mutation.
+4. Participant's location 10 with 1 mutation interaction with location 5 with 2 mutation increased 0.25 times for the disease when comparing with no mutation.
+5. Participant's location 10 with 2 mutation interaction with location 5 with 2 mutation increased 0.23 times for the disease when comparing with no mutation.
+(When all other variables in the model are held constant.)
+
+Null deviance: 2772.6  on 2000  degrees of freedom
+Residual deviance: 1684.9  on 1991  degrees of freedom
+AIC: 1702.9
+
+#Plot of standardized residuals
+```{r}
+plot(fitted(logit9), rstandard(logit9))
+```
+
+#Simple plot of predicted values
+```{r}
+mydata9 = select(mydata,location5,location10,class)
+mydata9 = na.omit(mydata9)
+mydata9$predy = predict(logit9,type="response")
+
+plot(as.numeric(class) ~ predy, data = mydata9,pch = 16,xlab="Predicted probability of 1 response",ylab="Actual response")
+
+g <- ggplot(data = mydata9)
+g + geom_jitter(aes(x=mydata9$class, y=mydata9$predy))
+g + geom_point(aes(x=mydata9$class, y=mydata9$predy))
+```
+
+#Logit 10
+```{r}
+logit10 <- glm(class ~ location1*location5*location10, data = mydata, family = binomial())
+summary(logit10)
+logisticPseudoR2s(logit10)
+```
+#Interpretation
+No significant, Bad fit model
+
+#Logit 11
+```{r}
+logit11 <- glm(class ~ location1 : location5 : location10, data = mydata, family = "binomial")
+summary(logit11)
+logisticPseudoR2s(logit11)
+```
+#Interpretation - unreliable model
+glm.fit: algorithm did not convergeglm.fit: fitted probabilities numerically 0 or 1 occurred
+
+
+#Logit 12
+#error (running time more than 1 hour)
+
+logit12 <- glm(class ~ location1 : location2 : location3 : location4 : location5 : location6 : location7 : location9 : location10, data = mydata, family = "binomial")
+summary(logit12)
+
+#ANOVA
+```{r}
+anova(logit3, logit9, logit11, test="Chisq")
+```
+
+##Conclusion
+The best fit model : class ~ location10:location5 - 1
+AIC: 1702.9 (Lowest AIC)
+
+
+
+##Use a neural network in Weka to classify the examples by disease status. Specify parameters such as the number of hidden nodes, learning rate, momentum and training time.
+![](Picture/Weka.png)
+![](Picture/Weka_setting.png)
+the number of hidden nodes : 16
+learning rate : 0.3
+momentum : 0.2
+training time : 500
